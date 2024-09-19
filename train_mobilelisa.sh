@@ -1,0 +1,3 @@
+--version="mtgv/MobileVLM_V2-1.7B"
+--use_mm_start_end=false
+--vision-tower="openai/clip-vit-large-patch14-336"
