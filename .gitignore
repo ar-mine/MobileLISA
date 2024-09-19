@@ -4,4 +4,5 @@ runs/
 .idea/
 dataset/
 pretrained/
+vis_output/
 

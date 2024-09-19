@@ -64,9 +64,9 @@ class MobileVLMMetaModel:
         # Build Vision-Projector
         if getattr(self, 'mm_projector', None) is None:
             self.mm_projector = build_vision_projector(self.config)
-        # In case it is frozen by LoRA
-        for p in self.mm_projector.parameters():
-            p.requires_grad = True
+        # # In case it is frozen by LoRA
+        # for p in self.mm_projector.parameters():
+        #     p.requires_grad = True
         if pretrain_mm_mlp_adapter is not None:
             mm_projector_weights = torch.load(pretrain_mm_mlp_adapter, map_location='cpu')
             def get_w(weights, keyword):
@@ -88,7 +88,8 @@ class MobileVLMMetaForCausalLM(ABC):
         image_features = self.get_model().mm_projector(image_features)
         return image_features
 
-    def prepare_inputs_labels_for_multimodal(self, input_ids, attention_mask, past_key_values, labels, images):
+    def prepare_inputs_labels_for_multimodal(
+            self, input_ids, attention_mask, past_key_values, labels, images):
         vision_tower = self.get_vision_tower()
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
             if past_key_values is not None and vision_tower is not None and images is not None and input_ids.shape[1] == 1:

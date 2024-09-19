@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import transformers
 from peft import LoraConfig, get_peft_model
 from transformers import AutoTokenizer
-
+from model.MobileLISA import MobileLISAForCausalLM
 from model.LISA import LISAForCausalLM
 from utils.utils import DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN
 
@@ -43,7 +43,7 @@ def parse_args(args):
     parser.add_argument("--lora_target_modules", default="q_proj,v_proj", type=str)
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     parser.add_argument("--train_mask_decoder", action="store_true", default=True)
-    parser.add_argument("--use_mm_start_end", action="store_true", default=True)
+    parser.add_argument("--use_mm_start_end", action="store_true", default=False)
     parser.add_argument(
         "--conv_type",
         default="llava_v1",
@@ -58,7 +58,10 @@ def parse_args(args):
 def main(args):
     args = parse_args(args)
     os.makedirs(args.vis_save_path, exist_ok=True)
-
+    if "Mobile" in args.version:
+        enable_mobile = True
+    else:
+        enable_mobile = False
     # Create model
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         args.version,
@@ -88,9 +91,14 @@ def main(args):
         torch_dtype = torch.bfloat16
     elif args.precision == "fp16":
         torch_dtype = torch.half
-    model = LISAForCausalLM.from_pretrained(
-        args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
-    )
+    if not enable_mobile:
+        model = LISAForCausalLM.from_pretrained(
+            args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
+        )
+    else:
+        model = MobileLISAForCausalLM.from_pretrained(
+            args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
+        )
     model.config.eos_token_id = tokenizer.eos_token_id
     model.config.bos_token_id = tokenizer.bos_token_id
     model.config.pad_token_id = tokenizer.pad_token_id

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, BitsAndBytesConfig, CLIPImageProcessor
 
 from model.LISA import LISAForCausalLM
+from model.MobileLISA import MobileLISAForCausalLM
 from model.llava import conversation as conversation_lib
 from model.llava.mm_utils import tokenizer_image_token
 from model.segment_anything.utils.transforms import ResizeLongestSide
@@ -36,7 +37,7 @@ def parse_args(args):
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     parser.add_argument("--load_in_8bit", action="store_true", default=False)
     parser.add_argument("--load_in_4bit", action="store_true", default=False)
-    parser.add_argument("--use_mm_start_end", action="store_true", default=True)
+    parser.add_argument("--use_mm_start_end", action="store_true", default=False)
     parser.add_argument(
         "--conv_type",
         default="llava_v1",
@@ -111,7 +112,7 @@ def main(args):
             }
         )
 
-    model = LISAForCausalLM.from_pretrained(
+    model = MobileLISAForCausalLM.from_pretrained(
         args.version, low_cpu_mem_usage=True, vision_tower=args.vision_tower, seg_token_idx=args.seg_token_idx, **kwargs
     )
 
