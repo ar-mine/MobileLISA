@@ -108,6 +108,8 @@ For more details, please refer to the [paper](https://arxiv.org/abs/2308.00692).
 
 ## Installation
 ```
+conda create -n mobilelisa python=3.10
+conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=12.1 -c pytorch -c nvidia
 pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 ```
@@ -290,24 +292,5 @@ python3 utils/data_processing.py
 
 Besides, we leveraged GPT-3.5 for rephrasing instructions, so images in the training set may have **more than one instructions (but fewer than six)** in the "text" field. During training, users may randomly select one as the text query to obtain a better model.
 
-
-## Citation 
-If you find this project useful in your research, please consider citing:
-
-```
-@article{lai2023lisa,
-  title={LISA: Reasoning Segmentation via Large Language Model},
-  author={Lai, Xin and Tian, Zhuotao and Chen, Yukang and Li, Yanwei and Yuan, Yuhui and Liu, Shu and Jia, Jiaya},
-  journal={arXiv preprint arXiv:2308.00692},
-  year={2023}
-}
-@article{yang2023improved,
-  title={An Improved Baseline for Reasoning Segmentation with Large Language Model},
-  author={Yang, Senqiao and Qu, Tianyuan and Lai, Xin and Tian, Zhuotao and Peng, Bohao and Liu, Shu and Jia, Jiaya},
-  journal={arXiv preprint arXiv:2312.17240},
-  year={2023}
-}
-```
-
 ## Acknowledgement
--  This work is built upon the [LLaVA](https://github.com/haotian-liu/LLaVA) and [SAM](https://github.com/facebookresearch/segment-anything). 
+-  This work is built upon the [MobileVLM](https://github.com/Meituan-AutoML/MobileVLM) and [LISA](https://github.com/dvlab-research/LISA). 
