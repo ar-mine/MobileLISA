@@ -25,3 +25,4 @@ deepspeed
 tensorboard
 scikit-image
 timm
+xmltodict
