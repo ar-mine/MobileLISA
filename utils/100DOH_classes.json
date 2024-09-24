@@ -1,0 +1,8 @@
+{
+    "0": "background",
+    "1": "left hand",
+    "2": "right hand",
+    "3": "objects touched by the left hand",
+    "4": "objects touched by right hand",
+    "5": "objects touched by both left and right hands"
+}

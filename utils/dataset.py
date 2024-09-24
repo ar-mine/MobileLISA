@@ -180,7 +180,7 @@ class HybridDataset(torch.utils.data.Dataset):
         exclude_val=False,
         dataset="sem_seg||refer_seg||vqa||reason_seg",
         sample_rate=[9, 3, 3, 1],
-        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary",
+        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH",
         refer_seg_data="refclef||refcoco||refcoco+||refcocog",
         vqa_data="llava_instruct_150k",
         reason_seg_data="ReasonSeg|train",

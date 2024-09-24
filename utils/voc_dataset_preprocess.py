@@ -1,3 +1,4 @@
+# VOC TO ADE20K
 import os
 from tqdm import tqdm
 import xmltodict
@@ -10,10 +11,11 @@ STATE_IDX = {
     "0": "background",
     "1": "left hand",
     "2": "right hand",
-    "3": "object contact by left hand",
-    "4": "object contact by right hand",
-    "5": "object contact by both left and right hands"
+    "3": "objects touched by the left hand",
+    "4": "objects touched by right hand",
+    "5": "objects touched by both left and right hands"
 }
+
 DEFAULT_COLOR = [
     (0, 0, 0), # Black
     (255, 0, 0), # Red

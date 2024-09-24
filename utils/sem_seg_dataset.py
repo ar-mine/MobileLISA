@@ -66,6 +66,38 @@ def init_ade20k(base_image_dir):
     return ade20k_classes, ade20k_images, ade20k_labels
 
 
+def init_100DOH(base_image_dir):
+    with open("utils/100DOH_classes.json", "r") as f:
+        _100DOH_classes = json.load(f)
+    _100DOH_classes = [_100DOH_classes[str(i)] for i in range(len(_100DOH_classes))]
+    _100DOH_classes = _100DOH_classes[1:]
+    _100DOH_classes = np.array(_100DOH_classes)
+    image_ids = sorted(
+        os.listdir(os.path.join(base_image_dir, "100DOH/images", "training"))
+    )
+    _100DOH_image_ids = []
+    for x in image_ids:
+        if x.endswith(".jpg"):
+            _100DOH_image_ids.append(x[:-4])
+    _100DOH_images = []
+    for image_id in _100DOH_image_ids:  # self.descriptions:
+        _100DOH_images.append(
+            os.path.join(
+                base_image_dir,
+                "100DOH",
+                "images",
+                "training",
+                "{}.jpg".format(image_id),
+            )
+        )
+    _100DOH_labels = [
+        x.replace(".jpg", ".png").replace("images", "annotations")
+        for x in _100DOH_images
+    ]
+    print("100DOH: ", len(_100DOH_images))
+    return _100DOH_classes, _100DOH_images, _100DOH_labels
+
+
 def init_cocostuff(base_image_dir):
     cocostuff_classes = []
     with open("utils/cocostuff_classes.txt") as f:
@@ -140,7 +172,7 @@ class SemSegDataset(torch.utils.data.Dataset):
         image_size: int = 224,
         num_classes_per_sample: int = 3,
         exclude_val=False,
-        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary",
+        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH",
     ):
         self.exclude_val = exclude_val
         self.samples_per_epoch = samples_per_epoch
@@ -235,14 +267,14 @@ class SemSegDataset(torch.utils.data.Dataset):
                     name = sampled_cls
                 sampled_classes.append(name)
 
-        elif ds in ["ade20k", "cocostuff", "mapillary"]:
+        elif ds in ["ade20k", "cocostuff", "mapillary", "100DOH"]:
             image, labels = self.data2list[ds]
             idx = random.randint(0, len(image) - 1)
             image_path = image[idx]
             label_path = labels[idx]
             label = Image.open(label_path)
             label = np.array(label)
-            if ds == "ade20k":
+            if ds in ["ade20k", "100DOH"]:
                 label[label == 0] = 255
                 label -= 1
                 label[label == 254] = 255
