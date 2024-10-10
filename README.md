@@ -96,6 +96,8 @@ deepspeed --master_port=24999 train_ds.py \
   --sample_rates="9,3,3,1" \
   --exp_name="lisa-7b"
 ```
+or executing the example in `train_mobilelisa.sh`.
+
 When training is finished, to get the full model weight:
 ```
 cd ./runs/lisa-7b/ckpt_model && python zero_to_fp32.py . ../pytorch_model.bin
@@ -109,14 +111,7 @@ CUDA_VISIBLE_DEVICES="" python merge_lora_weights_and_save_hf_model.py \
   --weight="PATH_TO_pytorch_model.bin" \
   --save_path="PATH_TO_SAVED_MODEL"
 ```
-
-For example:
-```
-CUDA_VISIBLE_DEVICES="" python3 merge_lora_weights_and_save_hf_model.py \
-  --version="./LLaVA/LLaVA-Lightning-7B-v1-1" \
-  --weight="lisa-7b/pytorch_model.bin" \
-  --save_path="./LISA-7B"
-```
+or executing the example in `get_full_model_weight.sh`.
 
 ### Validation
 ```
