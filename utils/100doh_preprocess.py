@@ -7,7 +7,8 @@ import cv2
 import numpy as np
 from segment_anything import sam_model_registry, SamPredictor
 
-STATE_IDX = {
+# 有一个问题，这里这个state index是在哪里用到的，为什么只找到了编号，没找到可以对应到的state index
+STATE_IDX = { # 这是一些编号，对这些编号描述语句进行一定的处理，不然那个class的定义过于狭隘
     "0": "background",
     "1": "left hand",
     "2": "right hand",
@@ -15,6 +16,35 @@ STATE_IDX = {
     "4": "objects touched by right hand",
     "5": "objects touched by both left and right hands"
 }
+
+"""
+touched by the left hand：被左手接触
+touched by the right hand：被右手接触
+held by the left hand：被左手拿着
+held by the right hand：被右手拿着
+grasped by the left hand：被左手抓住
+grasped by the right hand：被右手抓住
+supported by the left hand：被左手托住
+supported by the right hand：被右手托住
+lifted by the left hand：被左手抬起
+led by the right hand：被右手抬起
+carriifted by the left hand：被左手携带
+carried by the right hand：被右手携带
+handled by the left hand：被左手处理
+handled by the right hand：被右手处理
+manipulated by the left hand：被左手操控
+manipulated by the right hand：被右手操控
+passed to the left hand：传递给左手
+passed to the right hand：传递给右手
+
+突然发现如果训练的时候通过介词来表述，好像泛用性更好一些呀
+in the left hand
+on the left hand
+with the left hand
+between the fingers
+by the right hand
+at hand
+"""
 
 DEFAULT_COLOR = [
     (0, 0, 0), # Black
@@ -27,12 +57,14 @@ DEFAULT_COLOR = [
 
 dataset_dir = "/media/automan/6E94666294662CB1/A_Content/Datasets/100DOH_pascal_voc_format/VOCdevkit2007_handobj_100K/VOC2007"
 save_dir = "/media/automan/6E94666294662CB1/A_Content/Datasets/100DOH"
-with open(os.path.join(dataset_dir, "ImageSets/Main", "train.txt"), "r") as f:
+
+with open(os.path.join(dataset_dir, "ImageSets/Main", "train.txt"), "r") as f: #读取train.txt里的内容
     train_lines = f.read().splitlines()
 
-enable_resume = True
-with open("./checkpoint.txt", "r") as f:
-    train_lines_buffer = f.read().splitlines()
+enable_resume = False
+if enable_resume:
+    with open("../checkpoint.txt", "r") as f:
+        train_lines_buffer = f.read().splitlines()
 top_k = 0
 resume_buffer = []
 if top_k > 0:
@@ -88,8 +120,10 @@ for sample in tqdm(samples):
             multimask_output=False,
         )
         mask = masks[0].astype(bool)
-        annotation[mask] = seg_idx
-        masked_image[mask, :] = DEFAULT_COLOR[seg_idx]
+        # 这里筛选了一下需要mask的部分，如果annotation已经被打上了手的标签，那么就不会被再次打上mask
+        mask_to_update = mask & ((annotation != 1) & (annotation != 2))
+        annotation[mask_to_update] = seg_idx
+        masked_image[mask_to_update, :] = DEFAULT_COLOR[seg_idx]
     masked_image = (image*0.5 + masked_image*0.5).astype(np.uint8)
     resume_buffer.append(sample+"\n")
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -99,10 +133,10 @@ for sample in tqdm(samples):
     cv2.imwrite(os.path.join(save_dir, "visualizations", "train", f"{sample}.jpg"), masked_image)
 
 if enable_resume:
-    with open("./checkpoint.txt", "a") as f:
+    with open("../checkpoint.txt", "a") as f:
         f.writelines(resume_buffer)
 else:
-    with open("./checkpoint.txt", "w") as f:
+    with open("../checkpoint.txt", "w") as f:
         f.writelines(resume_buffer)
 
 # 输出转换后的字典

@@ -97,7 +97,8 @@ def parse_args(args):
     parser.add_argument("--gradient_checkpointing", action="store_true", default=True)
     parser.add_argument("--train_mask_decoder", action="store_true", default=True)
     parser.add_argument("--use_mm_start_end", action="store_true", default=False)
-    parser.add_argument("--auto_resume", action="store_true", default=True)
+    parser.add_argument("--auto_resume", action="store_true", default=False)
+    parser.add_argument("--enable_wandb", action="store_true", default=False)
     parser.add_argument(
         "--conv_type",
         default="llava_v1",
@@ -109,14 +110,26 @@ def parse_args(args):
 
 def main(args):
     args = parse_args(args)
+    # Use mobilevlm or llava-v1 as backbone
     if "Mobile" in args.version:
         enable_mobile = True
     else:
         enable_mobile = False
     args.log_dir = os.path.join(args.log_base_dir, args.exp_name)
+    enable_wandb = args.enable_wandb
     if args.local_rank == 0:
         os.makedirs(args.log_dir, exist_ok=True)
         writer = SummaryWriter(args.log_dir)
+        if enable_wandb:
+            import wandb
+            # start a new wandb run to track this script
+            wandb.init(
+                # set the wandb project where this run will be logged
+                project="MobileLISA",
+                # track hyperparameters and run metadata
+                config={
+                }
+            )
     else:
         writer = None
 
@@ -386,7 +399,7 @@ def main(args):
             args,
         )
 
-        if args.no_eval == False:
+        if not args.no_eval:
             giou, ciou = validate(val_loader, model_engine, epoch, writer, args)
             is_best = giou > best_score
             best_score = max(giou, best_score)
@@ -420,6 +433,8 @@ def train(
     args,
 ):
     """Main training loop."""
+    if args.enable_wandb:
+        import wandb
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
     losses = AverageMeter("Loss", ":.4f")
@@ -466,6 +481,10 @@ def train(
                 input_dict["images_clip"] = input_dict["images_clip"].float()
 
             output_dict = model(**input_dict)
+
+            if args.enable_wandb and args.local_rank == 0:
+                log_output = {k: v.item() for k, v in output_dict.items()}
+                wandb.log(log_output)
 
             loss = output_dict["loss"]
             ce_loss = output_dict["ce_loss"]
