@@ -63,7 +63,7 @@ with open(os.path.join(dataset_dir, "ImageSets/Main", "train.txt"), "r") as f: #
 
 enable_resume = False
 if enable_resume:
-    with open("../checkpoint.txt", "r") as f:
+    with open("./checkpoint.txt", "r") as f:
         train_lines_buffer = f.read().splitlines()
 top_k = 0
 resume_buffer = []
@@ -133,10 +133,10 @@ for sample in tqdm(samples):
     cv2.imwrite(os.path.join(save_dir, "visualizations", "train", f"{sample}.jpg"), masked_image)
 
 if enable_resume:
-    with open("../checkpoint.txt", "a") as f:
+    with open("./checkpoint.txt", "a") as f:
         f.writelines(resume_buffer)
 else:
-    with open("../checkpoint.txt", "w") as f:
+    with open("./checkpoint.txt", "w") as f:
         f.writelines(resume_buffer)
 
 # 输出转换后的字典
