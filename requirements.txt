@@ -27,3 +27,4 @@ scikit-image
 timm
 xmltodict
 wandb
+git+https://github.com/facebookresearch/segment-anything.git

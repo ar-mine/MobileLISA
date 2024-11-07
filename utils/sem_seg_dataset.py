@@ -73,7 +73,7 @@ def init_100DOH(base_image_dir):
     _100DOH_classes = _100DOH_classes[1:]
     _100DOH_classes = np.array(_100DOH_classes)
     image_ids = sorted(
-        os.listdir(os.path.join(base_image_dir, "100DOH/images", "training"))
+        os.listdir(os.path.join(base_image_dir, "100DOH/images", "train"))
     )
     _100DOH_image_ids = []
     for x in image_ids:
@@ -86,7 +86,7 @@ def init_100DOH(base_image_dir):
                 base_image_dir,
                 "100DOH",
                 "images",
-                "training",
+                "train",
                 "{}.jpg".format(image_id),
             )
         )

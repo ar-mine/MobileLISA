@@ -5,4 +5,8 @@ runs/
 dataset/
 pretrained/
 vis_output/
+wandb/
+# dataset processing
+100DOH_filter.txt
+checkpoint.txt
 
