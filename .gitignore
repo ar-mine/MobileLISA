@@ -1,12 +1,19 @@
+# project setting
 **/__pycache__
-runs/
 .vscode/
 .idea/
+
+# secondary folders
+runs/
 dataset/
 pretrained/
 vis_output/
 wandb/
+
 # dataset processing
 100DOH_filter.txt
 checkpoint.txt
+# model post-processing
+get_full_model_weight.sh
+merge_lora.sh
 
