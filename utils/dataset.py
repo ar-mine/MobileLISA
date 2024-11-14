@@ -7,7 +7,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from pycocotools import mask
+from torch.utils.tensorboard.summary import image
 from transformers import CLIPImageProcessor
+from PIL import Image
 
 from model.llava import conversation as conversation_lib
 from model.llava.constants import (DEFAULT_IMAGE_TOKEN, IGNORE_INDEX,
@@ -20,7 +22,7 @@ from .data_processing import get_mask_from_json
 from .reason_seg_dataset import ReasonSegDataset
 from .refer import REFER
 from .refer_seg_dataset import ReferSegDataset
-from .sem_seg_dataset import SemSegDataset
+from .sem_seg_dataset import SemSegDataset, init_100DOH, init_ade20k
 from .utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                     DEFAULT_IMAGE_TOKEN)
 from .vqa_dataset import VQADataset
@@ -289,11 +291,19 @@ class ValDataset(torch.utils.data.Dataset):
         splits = val_dataset.split("|")
         if len(splits) == 2:
             ds, split = splits
-            images = glob.glob(
-                os.path.join(self.base_image_dir, "reason_seg", ds, split, "*.jpg")
-            )
+            if ds in ["100DOH", "ade20k"]:
+                classes, images, labels = eval("init_{}".format(ds))(base_image_dir, split)
+                self.classes = classes
+                self.labels = labels
+                self.data_type = ds
+            elif ds == "ReasonSeg":
+                images = glob.glob(
+                    os.path.join(self.base_image_dir, "reason_seg", ds, split, "*.jpg")
+                )
+                self.data_type = "reason_seg"
+            else:
+                raise NotImplementedError
             self.images = images
-            self.data_type = "reason_seg"
         elif len(splits) == 3:
             ds, splitBy, split = splits
             refer_api = REFER(self.base_image_dir, ds, splitBy)
@@ -327,6 +337,8 @@ class ValDataset(torch.utils.data.Dataset):
             refer_seg_ds["img2refs"] = img2refs
             self.refer_seg_ds = refer_seg_ds
             self.data_type = "refer_seg"
+        else:
+            raise NotImplementedError
 
         self.ds = ds
         self.image_size = image_size
@@ -378,6 +390,23 @@ class ValDataset(torch.utils.data.Dataset):
             sampled_ann_ids = ann_ids
             image = cv2.imread(image_path)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            is_sentence = False
+        elif self.data_type in ["100DOH", "ade20k"]:
+            image_path = self.images[idx]
+            image = cv2.imread(image_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            label_path = self.labels[idx]
+            label = Image.open(label_path)
+            label = np.array(label)
+            label[label == 0] = 255
+            label -= 1
+            label[label == 254] = 255
+            unique_label = np.unique(label).tolist()
+            if 255 in unique_label:
+                unique_label.remove(255)
+            classes = [self.classes[class_id] for class_id in unique_label]
+            class_ids = [class_id for class_id in unique_label]
+            sampled_sents = classes
             is_sentence = False
         else:
             image_path = self.images[idx]
@@ -446,6 +475,12 @@ class ValDataset(torch.utils.data.Dataset):
                 )  # sometimes there are multiple binary map (corresponding to multiple segs)
                 m = m.astype(np.uint8)  # convert to np.uint8
                 masks.append(m)
+        elif self.data_type in ["100DOH", "ade20k"]:
+            label = torch.from_numpy(label).long()
+            masks = []
+            for class_id in class_ids:
+                masks.append(label == class_id)
+            masks = torch.stack(masks, dim=0)
         else:
             masks = [mask_json]
 

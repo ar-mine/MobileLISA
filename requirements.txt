@@ -21,7 +21,7 @@ transformers==4.33.1
 uvicorn==0.23.2
 scipy==1.11.2
 bitsandbytes==0.41.1
-deepspeed
+deepspeed==0.15.2
 tensorboard
 scikit-image
 timm

@@ -36,12 +36,12 @@ def init_mapillary(base_image_dir):
     return mapillary_classes, mapillary_images, mapillary_labels
 
 
-def init_ade20k(base_image_dir):
+def init_ade20k(base_image_dir, split="train"):
     with open("utils/ade20k_classes.json", "r") as f:
         ade20k_classes = json.load(f)
     ade20k_classes = np.array(ade20k_classes)
     image_ids = sorted(
-        os.listdir(os.path.join(base_image_dir, "ade20k/images", "training"))
+        os.listdir(os.path.join(base_image_dir, "ade20k/images", split))
     )
     ade20k_image_ids = []
     for x in image_ids:
@@ -54,7 +54,7 @@ def init_ade20k(base_image_dir):
                 base_image_dir,
                 "ade20k",
                 "images",
-                "training",
+                split,
                 "{}.jpg".format(image_id),
             )
         )
@@ -66,14 +66,14 @@ def init_ade20k(base_image_dir):
     return ade20k_classes, ade20k_images, ade20k_labels
 
 
-def init_100DOH(base_image_dir):
+def init_100DOH(base_image_dir, split="train"):
     with open("utils/100DOH_classes.json", "r") as f:
         _100DOH_classes = json.load(f)
     _100DOH_classes = [_100DOH_classes[str(i)] for i in range(len(_100DOH_classes))]
     _100DOH_classes = _100DOH_classes[1:]
     _100DOH_classes = np.array(_100DOH_classes)
     image_ids = sorted(
-        os.listdir(os.path.join(base_image_dir, "100DOH/images", "train"))
+        os.listdir(os.path.join(base_image_dir, "100DOH/images", split))
     )
     _100DOH_image_ids = []
     for x in image_ids:
@@ -86,7 +86,7 @@ def init_100DOH(base_image_dir):
                 base_image_dir,
                 "100DOH",
                 "images",
-                "train",
+                split,
                 "{}.jpg".format(image_id),
             )
         )

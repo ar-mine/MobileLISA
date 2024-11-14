@@ -7,6 +7,7 @@ from functools import partial
 
 import deepspeed
 import numpy as np
+import psutil
 import torch
 import tqdm
 import transformers
@@ -51,7 +52,7 @@ def parse_args(args):
     parser.add_argument("--sample_rates", default="9,3,3,1", type=str)
     parser.add_argument(
         "--sem_seg_data",
-        default="ade20k||cocostuff||pascal_part||paco_lvis||mapillary",
+        default="ade20k||cocostuff||pascal_part||paco_lvis||mapillary||100DOH",
         type=str,
     )
     parser.add_argument(
@@ -369,7 +370,7 @@ def main(args):
             batch_size=args.val_batch_size,
             shuffle=False,
             num_workers=args.workers,
-            pin_memory=False,
+            pin_memory=True,
             sampler=val_sampler,
             collate_fn=partial(
                 collate_fn,
@@ -384,7 +385,7 @@ def main(args):
     best_score, cur_ciou = 0.0, 0.0
 
     if args.eval_only:
-        giou, ciou = validate(val_loader, model_engine, 0, writer, args)
+        validate(val_loader, model_engine, 0, writer, args)
         exit()
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -550,9 +551,20 @@ def train(
 
 
 def validate(val_loader, model_engine, epoch, writer, args):
+    if args.enable_wandb:
+        import wandb
+
     intersection_meter = AverageMeter("Intersec", ":6.3f", Summary.SUM)
     union_meter = AverageMeter("Union", ":6.3f", Summary.SUM)
     acc_iou_meter = AverageMeter("gIoU", ":6.3f", Summary.SUM)
+
+    # Storage for CPU/GPU memory usage and inference time
+    cpu_memory_usages = []
+    gpu_memory_usages = []
+    inference_times = []
+
+    # Get information of process to retrieve CPU memory usage获取进程信息，用于获取内存占用
+    process = psutil.Process()
 
     model_engine.eval()
 
@@ -570,8 +582,21 @@ def validate(val_loader, model_engine, epoch, writer, args):
             input_dict["images"] = input_dict["images"].float()
             input_dict["images_clip"] = input_dict["images_clip"].float()
 
+        # Record start time
+        start_time = time.time()
+
         with torch.no_grad():
             output_dict = model_engine(**input_dict)
+
+        # Record inference time
+        inference_time = time.time() - start_time
+        inference_times.append(inference_time)
+        # Record CPU memory usage
+        cpu_memory_usage = process.memory_info().rss / 1024 / 1024  # 转换为 MB
+        cpu_memory_usages.append(cpu_memory_usage)
+        # Record GPU memory usage
+        gpu_memory_usage = torch.cuda.memory_allocated("cuda:0") / 1024 / 1024  # 转换为 MB
+        gpu_memory_usages.append(gpu_memory_usage)
 
         pred_masks = output_dict["pred_masks"]
         masks_list = output_dict["gt_masks"][0].int()
@@ -592,6 +617,9 @@ def validate(val_loader, model_engine, epoch, writer, args):
         intersection_meter.update(intersection), union_meter.update(
             union
         ), acc_iou_meter.update(acc_iou, n=masks_list.shape[0])
+        if args.local_rank == 0 and args.enable_wandb:
+            log_output = {"intersection": intersection, "union": union, "acc_iou": acc_iou}
+            wandb.log(log_output)
 
     intersection_meter.all_reduce()
     union_meter.all_reduce()
@@ -602,11 +630,16 @@ def validate(val_loader, model_engine, epoch, writer, args):
     giou = acc_iou_meter.avg[1]
 
     if args.local_rank == 0:
+        print("\nEvaluation Metrics:")
         writer.add_scalar("val/giou", giou, epoch)
         writer.add_scalar("val/ciou", ciou, epoch)
         print("giou: {:.4f}, ciou: {:.4f}".format(giou, ciou))
-
-    return giou, ciou
+        avg_cpu_memory_usage = sum(cpu_memory_usages) / len(cpu_memory_usages)
+        avg_gpu_memory_usage = sum(gpu_memory_usages) / len(gpu_memory_usages) if gpu_memory_usages else 0
+        avg_inference_time = sum(inference_times) / len(inference_times)
+        print(f"Average CPU Memory Usage: {avg_cpu_memory_usage:.2f} MB")
+        print(f"Average GPU Memory Usage: {avg_gpu_memory_usage:.2f} MB")
+        print(f"Average Inference Time per Batch: {avg_inference_time:.4f} seconds")
 
 
 if __name__ == "__main__":
