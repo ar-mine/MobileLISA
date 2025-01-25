@@ -16,6 +16,7 @@ from model.segment_anything.utils.transforms import ResizeLongestSide
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
 
+DEBUG = True
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description="LISA chat")
@@ -68,6 +69,10 @@ def main(args):
     args = parse_args(args)
     os.makedirs(args.vis_save_path, exist_ok=True)
 
+    if DEBUG:
+        path = "/media/automan/6E94666294662CB1/A_Content/Datasets/100DOH/images/test"
+        targets = iter(sorted(os.listdir(path)))
+
     # Create model
     tokenizer = AutoTokenizer.from_pretrained(
         args.version,
@@ -111,10 +116,19 @@ def main(args):
                 ),
             }
         )
-
-    model = MobileLISAForCausalLM.from_pretrained(
-        args.version, low_cpu_mem_usage=True, vision_tower=args.vision_tower, seg_token_idx=args.seg_token_idx, **kwargs
-    )
+    # Use mobilevlm or llava-v1 as backbone
+    if "Mobile" in args.version:
+        enable_mobile = True
+    else:
+        enable_mobile = False
+    if not enable_mobile:
+        model = LISAForCausalLM.from_pretrained(
+            args.version, low_cpu_mem_usage=True, vision_tower=args.vision_tower, seg_token_idx=args.seg_token_idx, **kwargs
+        )
+    else:
+        model = MobileLISAForCausalLM.from_pretrained(
+            args.version, low_cpu_mem_usage=True, vision_tower=args.vision_tower, seg_token_idx=args.seg_token_idx, **kwargs
+        )
 
     model.config.eos_token_id = tokenizer.eos_token_id
     model.config.bos_token_id = tokenizer.bos_token_id
@@ -156,8 +170,11 @@ def main(args):
         conv = conversation_lib.conv_templates[args.conv_type].copy()
         conv.messages = []
 
-        prompt = input("Please input your prompt: ")
-        prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
+        if DEBUG:
+            prompt = DEFAULT_IMAGE_TOKEN + "\n" + "Please help me segment the object in the right hand"
+        else:
+            prompt = input("Please input your prompt: ")
+            prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
         if args.use_mm_start_end:
             replace_token = (
                 DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
@@ -168,10 +185,16 @@ def main(args):
         conv.append_message(conv.roles[1], "")
         prompt = conv.get_prompt()
 
-        image_path = input("Please input the image path: ")
-        if not os.path.exists(image_path):
-            print("File not found in {}".format(image_path))
-            continue
+        if DEBUG:
+            target = next(targets)
+            if target is None:
+                break
+            image_path = os.path.join(path, target)
+        else:
+            image_path = input("Please input the image path: ")
+            if not os.path.exists(image_path):
+                print("File not found in {}".format(image_path))
+                continue
 
         image_np = cv2.imread(image_path)
         image_np = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)

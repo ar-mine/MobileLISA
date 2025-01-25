@@ -41,6 +41,26 @@ ANSWER_LIST = [
     "[SEG].",
 ]
 
+AFFORD_QUESTION_LIST = [
+    DEFAULT_IMAGE_TOKEN + "\n" +
+    "What part of the {object_name} should we interact with in order to {action_name} it?"
+]
+
+# AFFORD_ANSWER_LIST = [
+#     "It is [MASK].",
+#     "Sure, [MASK].",
+#     "Sure, it is [MASK].",
+#     "Sure, the segmentation result is [MASK].",
+#     "[MASK].",
+# ]
+
+AFFORD_ANSWER_LIST = [
+    "It is [SEG].",
+    "Sure, [SEG].",
+    "Sure, it is [SEG].",
+    "Sure, the segmentation result is [SEG].",
+    "[SEG].",
+]
 
 class Summary(Enum):
     NONE = 0

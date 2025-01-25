@@ -14,7 +14,7 @@ from transformers import CLIPImageProcessor
 from model.llava import conversation as conversation_lib
 from model.segment_anything.utils.transforms import ResizeLongestSide
 
-from .utils import ANSWER_LIST, SHORT_QUESTION_LIST
+from .utils import ANSWER_LIST, SHORT_QUESTION_LIST, AFFORD_QUESTION_LIST
 
 
 def init_mapillary(base_image_dir):
@@ -98,6 +98,39 @@ def init_100DOH(base_image_dir, split="train"):
     return _100DOH_classes, _100DOH_images, _100DOH_labels
 
 
+def init_agd20k(base_image_dir):
+    _agd20k_images = []
+    _agd20k_classes = []
+
+    root_path = os.path.join(base_image_dir, "agd20k")
+    for split in os.listdir(root_path):
+        # Seen / Unseen
+        if split not in ["Seen", "Unseen"]:
+            raise ValueError("split must be 'Seen' or 'Unseen'")
+        split_path = os.path.join(root_path, split, "testset/egocentric")
+        for split_action in os.listdir(split_path):
+            action_path = os.path.join(split_path, split_action)
+            for split_category in os.listdir(action_path):
+                _agd20k_image_ids = os.listdir(
+                    os.path.join(action_path, split_category))
+                for image_id in _agd20k_image_ids:
+                    if 'json' not in image_id:
+                        _agd20k_images.append(
+                            os.path.join(
+                                action_path,
+                                split_category,
+                                image_id
+                            )
+                        )
+                        _agd20k_classes.append([split_action, split_category])
+    _agd20k_labels = [
+        x.replace(".jpg", ".png").replace("egocentric", "GT")
+        for x in _agd20k_images
+    ]
+    print("agd20k: ", len(_agd20k_images))
+    return _agd20k_classes, _agd20k_images, _agd20k_labels
+
+
 def init_cocostuff(base_image_dir):
     cocostuff_classes = []
     with open("utils/cocostuff_classes.txt") as f:
@@ -172,7 +205,7 @@ class SemSegDataset(torch.utils.data.Dataset):
         image_size: int = 224,
         num_classes_per_sample: int = 3,
         exclude_val=False,
-        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH",
+        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH||agd20k",
     ):
         self.exclude_val = exclude_val
         self.samples_per_epoch = samples_per_epoch
@@ -274,7 +307,7 @@ class SemSegDataset(torch.utils.data.Dataset):
             label_path = labels[idx]
             label = Image.open(label_path)
             label = np.array(label)
-            if ds in ["ade20k", "100DOH"]:
+            if ds in ["ade20k", "100DOH", "agd20k"]:
                 label[label == 0] = 255
                 label -= 1
                 label[label == 254] = 255
@@ -304,23 +337,52 @@ class SemSegDataset(torch.utils.data.Dataset):
             else:
                 sampled_classes = classes
 
+        elif ds == "agd20k":
+            image, labels = self.data2list[ds]
+            idx = random.randint(0, len(image) - 1)
+            image_path = image[idx]
+            label_path = labels[idx]
+            label = Image.open(label_path)
+            label = np.array(label)
+
+            img = cv2.imread(image_path)
+            image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            # preprocess image for clip
+            image_clip = self.clip_image_processor.preprocess(
+                image, return_tensors="pt"
+            )["pixel_values"][0]
+            image = self.transform.apply_image(image)  # preprocess image for sam
+            resize = image.shape[:2]
+
+            sampled_classes = self.data2classes[ds][idx]
+        else:
+            raise NotImplementedError
+
         questions = []
         answers = []
         class_ids = []
-        for sampled_cls in sampled_classes:
-            text = sampled_cls
-
-            assert len(text.split("||")) == 1
-            question_template = random.choice(self.short_question_list)
-            questions.append(question_template.format(class_name=text.lower()))
-
+        if ds == "agd20k":
+            question_template = random.choice(AFFORD_QUESTION_LIST)
+            questions.append(
+                question_template.format(object_name=sampled_classes[0].lower(),
+                                         action_name=sampled_classes[1].lower())
+            )
             answers.append(random.choice(self.answer_list))
+        else:
+            for sampled_cls in sampled_classes:
+                text = sampled_cls
 
-            if ds in ["paco_lvis", "pascal_part"]:
-                continue
+                assert len(text.split("||")) == 1
+                question_template = random.choice(self.short_question_list)
+                questions.append(question_template.format(class_name=text.lower()))
 
-            class_id = self.data2classes[ds].tolist().index(sampled_cls)
-            class_ids.append(class_id)
+                answers.append(random.choice(self.answer_list))
+
+                if ds in ["paco_lvis", "pascal_part"]:
+                    continue
+
+                class_id = self.data2classes[ds].tolist().index(sampled_cls)
+                class_ids.append(class_id)
 
         conversations = []
         conv = conversation_lib.default_conversation.copy()
@@ -348,12 +410,17 @@ class SemSegDataset(torch.utils.data.Dataset):
             masks = torch.from_numpy(masks)
             label = torch.ones(masks.shape[1], masks.shape[2]) * self.ignore_label
 
+        elif ds == "agd20k":
+            label = torch.from_numpy(label).long()
+            masks = torch.stack([label], dim=0)
+
         else:
             label = torch.from_numpy(label).long()
             masks = []
             for class_id in class_ids:
                 masks.append(label == class_id)
             masks = torch.stack(masks, dim=0)
+
         return (
             image_path,
             image,

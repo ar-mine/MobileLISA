@@ -1,0 +1,14 @@
+deepspeed  --master_port=24999 train_ds.py \
+--version="mtgv/MobileVLM_V2-1.7B" \
+--dataset_dir=./dataset \
+--vision-tower="openai/clip-vit-large-patch14-336" \
+--vision_pretrained="./pretrained/sam_vit_h_4b8939.pth" \
+--dataset="sem_seg" \
+--sample_rates="1" \
+--exp_name="lisa-7b" \
+--epochs=1 \
+--batch_size=16 \
+--sem_seg_data="agd20k" \
+--workers=8 \
+--no_eval \
+--grad_accumulation_steps=10
