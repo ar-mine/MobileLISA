@@ -50,6 +50,7 @@ def sigmoid_ce_loss(
         targets: A float tensor with the same shape as inputs. Stores the binary
                  classification label for each element in inputs
                 (0 for the negative class and 1 for the positive class).
+        num_masks:
     Returns:
         Loss tensor
     """

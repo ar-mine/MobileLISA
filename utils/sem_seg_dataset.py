@@ -125,7 +125,11 @@ def init_agd20k(base_image_dir):
                         _agd20k_classes.append([split_action, split_category])
     _agd20k_labels = [
         x.replace(".jpg", ".png").replace("egocentric", "GT")
-        for x in _agd20k_images
+        for x in _agd20k_images if os.path.exists(x.replace(".jpg", ".png").replace("egocentric", "GT"))
+    ]
+    _agd20k_images = [
+        x.replace(".png", ".jpg").replace("GT", "egocentric")
+        for x in _agd20k_labels
     ]
     print("agd20k: ", len(_agd20k_images))
     return _agd20k_classes, _agd20k_images, _agd20k_labels
@@ -343,7 +347,7 @@ class SemSegDataset(torch.utils.data.Dataset):
             image_path = image[idx]
             label_path = labels[idx]
             label = Image.open(label_path)
-            label = np.array(label)
+            label = np.array(label).astype(bool)
 
             img = cv2.imread(image_path)
             image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
