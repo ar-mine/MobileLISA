@@ -488,7 +488,7 @@ class SemSegDataset(torch.utils.data.Dataset):
             for candidate in candidates:
                 question = candidate['Q']
                 answer = candidate['A']
-                if question.count('<c') == 0 and answer.count('<c') >= 1:
+                if question.count('<c') == 0 and 4 >= answer.count('<c') >= 1:
                     multimodal = True
                     break
             questions.append(DEFAULT_IMAGE_TOKEN + "\n" + question)
