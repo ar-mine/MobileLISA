@@ -249,38 +249,39 @@ def main(args):
         text_output = text_output.replace("\n", "").replace("  ", " ")
         print("text_output: ", text_output)
 
-        for i, pred_mask in enumerate(pred_masks):
-            if pred_mask.shape[0] == 0:
+        for idx in range(len(pred_masks)):
+            if pred_masks[idx].shape[0] == 0:
                 continue
+            pred_masks_np = pred_masks[idx].detach().cpu().numpy()
+            for i in range(pred_masks_np.shape[0]):
+                pred_mask = pred_masks_np[i]
+                if BOOL_MASK:
+                    pred_mask = pred_mask > 0
+                else:
+                    pred_mask[pred_mask<0] = 0
+                    # Normalization
+                    pred_mask = pred_mask / pred_mask.max()
 
-            pred_mask = pred_mask.detach().cpu().numpy()[0]
-            if BOOL_MASK:
-                pred_mask = pred_mask > 0
-            else:
-                pred_mask[pred_mask<0] = 0
-                # Normalization
-                pred_mask = pred_mask / pred_mask.max()
+                save_path = "{}/{}_mask_{}.jpg".format(
+                    args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
+                )
+                cv2.imwrite(save_path, pred_mask * 255)
+                print("{} has been saved.".format(save_path))
 
-            save_path = "{}/{}_mask_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            cv2.imwrite(save_path, pred_mask * 255)
-            print("{} has been saved.".format(save_path))
-
-            save_path = "{}/{}_masked_img_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            save_img = image_np.copy()
-            if BOOL_MASK:
-                save_img[pred_mask] = (
-                    image_np * 0.5
-                    + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
-                )[pred_mask]
-            else:
-                save_img = (image_np * 0.5 + pred_mask[:, :, None] * np.array([255, 0, 0]) * 0.5).astype(np.uint8)
-            save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(save_path, save_img)
-            print("{} has been saved.".format(save_path))
+                save_path = "{}/{}_masked_img_{}.jpg".format(
+                    args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
+                )
+                save_img = image_np.copy()
+                if BOOL_MASK:
+                    save_img[pred_mask] = (
+                        image_np * 0.5
+                        + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
+                    )[pred_mask]
+                else:
+                    save_img = (image_np * 0.5 + pred_mask[:, :, None] * np.array([255, 0, 0]) * 0.5).astype(np.uint8)
+                save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(save_path, save_img)
+                print("{} has been saved.".format(save_path))
 
 
 if __name__ == "__main__":

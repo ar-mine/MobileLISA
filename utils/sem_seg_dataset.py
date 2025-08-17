@@ -328,6 +328,9 @@ class SemSegDataset(torch.utils.data.Dataset):
                 c: i for i, c in enumerate(self.data2classes["cocostuff"])
             }
 
+        self.count = 0
+        self.multimodal_count = 0
+
     def __len__(self):
         return self.samples_per_epoch
 
@@ -485,13 +488,13 @@ class SemSegDataset(torch.utils.data.Dataset):
             for candidate in candidates:
                 question = candidate['Q']
                 answer = candidate['A']
-                if question.count('<c') == 0 and answer.count('<c') == 1:
+                if question.count('<c') == 0 and answer.count('<c') >= 1:
                     multimodal = True
                     break
             questions.append(DEFAULT_IMAGE_TOKEN + "\n" + question)
             # Now only support one
             if multimodal:
-                tag = np.unique(re.findall(r'<(.*?)>', answer)).tolist()
+                tag = re.findall(r'<(.*?)>', answer)
                 for t in tag:
                     answer = answer.replace(t, 'SEG')
             answers.append(answer)
@@ -542,27 +545,36 @@ class SemSegDataset(torch.utils.data.Dataset):
             masks = torch.stack([label], dim=0)
         elif ds == "drivelm":
             if multimodal:
-                index = f"<{tag[0]}>".replace(" ", "")
-                try:
-                    cam_id = index.split(",")[1]
-                    order = CAM_ORDER.index(cam_id)
-                except:
-                    print("error")
-                mask_path_list = [None]*6
-                mask_path = os.path.join(self.base_image_dir, "drivelm", info['key_object_infos'][index]['mask_path'])
-                mask_path_list[order] = mask_path
-                mask = combine_images_2x3(mask_path_list, gray=True)
-                label = (torch.from_numpy(mask)/255.0).long()
-                masks = torch.stack([label], dim=0)
+                masks = []
+                for t in tag:
+                    index = f"<{t}>".replace(" ", "")
+                    try:
+                        cam_id = index.split(",")[1]
+                        order = CAM_ORDER.index(cam_id)
+                    except Exception as e:
+                        print(e)
+                    mask_path_list = [None]*6
+                    mask_path = os.path.join(self.base_image_dir, "drivelm", info['key_object_infos'][index]['mask_path'])
+                    mask_path_list[order] = mask_path
+                    mask = combine_images_2x3(mask_path_list, gray=True)
+                    masks.append((torch.from_numpy(mask)/255.0).long())
+                masks = torch.stack(masks, dim=0)
+                label = torch.ones(masks.shape[1], masks.shape[2]) * self.ignore_label
             else:
-                label = torch.Tensor(0)
                 masks = torch.Tensor(0)
+                label = torch.Tensor(0)
         else:
             label = torch.from_numpy(label).long()
             masks = []
             for class_id in class_ids:
                 masks.append(label == class_id)
             masks = torch.stack(masks, dim=0)
+
+        # self.count += 1
+        # if multimodal:
+        #     self.multimodal_count += 1
+        # if self.count % 100 == 0:
+        #     print(self.multimodal_count/self.count)
 
         return (
             image_path,

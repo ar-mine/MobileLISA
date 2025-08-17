@@ -128,8 +128,8 @@ def main(args):
                 # set the wandb project where this run will be logged
                 project="MobileLISA",
                 # track hyperparameters and run metadata
-                config={
-                }
+                config={},
+                mode="offline"
             )
     else:
         writer = None
@@ -495,9 +495,11 @@ def train(
 
             losses.update(loss.item(), input_dict["images"].size(0))
             ce_losses.update(ce_loss.item(), input_dict["images"].size(0))
-            mask_bce_losses.update(mask_bce_loss.item(), input_dict["images"].size(0))
-            mask_dice_losses.update(mask_dice_loss.item(), input_dict["images"].size(0))
-            mask_losses.update(mask_loss.item(), input_dict["images"].size(0))
+            # if mask_bce_loss.item() > 1e-6:
+            if 1:
+                mask_bce_losses.update(mask_bce_loss.item(), input_dict["images"].size(0))
+                mask_dice_losses.update(mask_dice_loss.item(), input_dict["images"].size(0))
+                mask_losses.update(mask_loss.item(), input_dict["images"].size(0))
             model.backward(loss)
             model.step()
 
