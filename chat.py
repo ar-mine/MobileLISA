@@ -16,7 +16,8 @@ from model.segment_anything.utils.transforms import ResizeLongestSide
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
 
-DEBUG = True
+DEBUG = False
+BOOL_MASK = False
 
 def parse_args(args):
     parser = argparse.ArgumentParser(description="LISA chat")
@@ -121,6 +122,7 @@ def main(args):
         enable_mobile = True
     else:
         enable_mobile = False
+    enable_mobile = True
     if not enable_mobile:
         model = LISAForCausalLM.from_pretrained(
             args.version, low_cpu_mem_usage=True, vision_tower=args.vision_tower, seg_token_idx=args.seg_token_idx, **kwargs
@@ -252,22 +254,30 @@ def main(args):
                 continue
 
             pred_mask = pred_mask.detach().cpu().numpy()[0]
-            pred_mask = pred_mask > 0
+            if BOOL_MASK:
+                pred_mask = pred_mask > 0
+            else:
+                pred_mask[pred_mask<0] = 0
+                # Normalization
+                pred_mask = pred_mask / pred_mask.max()
 
             save_path = "{}/{}_mask_{}.jpg".format(
                 args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
             )
-            cv2.imwrite(save_path, pred_mask * 100)
+            cv2.imwrite(save_path, pred_mask * 255)
             print("{} has been saved.".format(save_path))
 
             save_path = "{}/{}_masked_img_{}.jpg".format(
                 args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
             )
             save_img = image_np.copy()
-            save_img[pred_mask] = (
-                image_np * 0.5
-                + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
-            )[pred_mask]
+            if BOOL_MASK:
+                save_img[pred_mask] = (
+                    image_np * 0.5
+                    + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
+                )[pred_mask]
+            else:
+                save_img = (image_np * 0.5 + pred_mask[:, :, None] * np.array([255, 0, 0]) * 0.5).astype(np.uint8)
             save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
             cv2.imwrite(save_path, save_img)
             print("{} has been saved.".format(save_path))

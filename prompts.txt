@@ -1,0 +1,6 @@
+Input:
+Which lanes are each important object on in the scene?
+/media/automan/ExSpace/MobileLISA/vis_output/drivelm_example.png
+GT:
+/media/automan/ExSpace/MobileLISA/vis_output/drivelm_example_mask.png
+'<SEG> is in the right lane.'

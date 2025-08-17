@@ -2,6 +2,7 @@ import glob
 import json
 import os
 import random
+import re
 
 import cv2
 import numpy as np
@@ -10,11 +11,12 @@ import torch.nn.functional as F
 from PIL import Image
 from pycocotools.coco import COCO
 from transformers import CLIPImageProcessor
+import matplotlib.pyplot as plt
 
 from model.llava import conversation as conversation_lib
 from model.segment_anything.utils.transforms import ResizeLongestSide
 
-from .utils import ANSWER_LIST, SHORT_QUESTION_LIST, AFFORD_QUESTION_LIST
+from .utils import ANSWER_LIST, SHORT_QUESTION_LIST, AFFORD_QUESTION_LIST, DEFAULT_IMAGE_TOKEN
 
 
 def init_mapillary(base_image_dir):
@@ -39,6 +41,8 @@ def init_mapillary(base_image_dir):
 def init_ade20k(base_image_dir, split="train"):
     with open("utils/ade20k_classes.json", "r") as f:
         ade20k_classes = json.load(f)
+    if split == "train":
+        split = "training"
     ade20k_classes = np.array(ade20k_classes)
     image_ids = sorted(
         os.listdir(os.path.join(base_image_dir, "ade20k/images", split))
@@ -193,6 +197,91 @@ def init_pascal_part(base_image_dir):
     return class_map_pascal_part, img_ids, coco_api_pascal_part
 
 
+def combine_images_2x3(image_paths, gray:bool=False):
+    """
+    Combine six images into a 2x3 grid and resize to half size.
+    Returns the combined and resized image as a numpy array.
+
+    Args:
+    - image_paths (list of str): List of six image file paths.
+
+    Returns:
+    - np.ndarray: The combined and resized image array.
+    """
+    if len(image_paths) != 6:
+        raise ValueError("Exactly six image paths must be provided.")
+
+    # Find the first non-None image to get shape and dtype
+    first_image = None
+    for path in image_paths:
+        if path is not None:
+            if gray:
+                first_image = np.array( Image.open(path).convert('L'))
+                h, w = first_image.shape
+            else:
+                first_image = plt.imread(path)
+                h, w, c = first_image.shape
+            dtype = first_image.dtype
+            break
+
+    if first_image is None:
+        raise ValueError("At least one image path must be provided.")
+
+    # Load all images or create zeros, check consistency
+    images = []
+    for path in image_paths:
+        if path is not None:
+            if gray:
+                img = np.array(Image.open(path).convert('L'))
+                if img.shape != (h, w) or img.dtype != dtype:
+                    raise ValueError("All images must have the same dimensions and dtype.")
+            else:
+                img = plt.imread(path)
+                if img.shape != (h, w, c) or img.dtype != dtype:
+                    raise ValueError("All images must have the same dimensions and dtype.")
+            images.append(img)
+        else:
+            if gray:
+                zero_img = np.zeros((h, w), dtype=dtype)
+            else:
+                zero_img = np.zeros((h, w, c), dtype=dtype)
+            images.append(zero_img)
+
+    # Create combined image array
+    if gray:
+        combined = np.zeros((2 * h, 3 * w), dtype=dtype)
+    else:
+        combined = np.zeros((2 * h, 3 * w, c), dtype=dtype)
+
+    # Place images in 2x3 grid
+    for i in range(2):
+        for j in range(3):
+            idx = i * 3 + j
+            combined[i * h:(i + 1) * h, j * w:(j + 1) * w] = images[idx]
+
+    # If the images are in float format, convert to uint8
+    if combined.dtype == np.float32 or combined.dtype == np.float64:
+        combined = (combined * 255).astype(np.uint8)
+
+    return combined
+
+
+CAM_ORDER = ('CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT')
+def init_drivelm(base_image_dir):
+    file_path = os.path.join(base_image_dir, "drivelm", "v1_0_train_nus_grounding.json")
+    with open(file_path, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
+    key_frames = []
+    for k, v in data.items():
+        key_frames.extend([value for value in v['key_frames'].values()])
+
+    for frame in key_frames:
+        frame['QA']['perception'] = [p for p in frame['QA']['perception'] if p['Q'].count('<c') == 0]
+
+    print("DriveLm: ", len(key_frames))
+    return None, None, key_frames
+
 class SemSegDataset(torch.utils.data.Dataset):
     pixel_mean = torch.Tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
     pixel_std = torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
@@ -209,7 +298,7 @@ class SemSegDataset(torch.utils.data.Dataset):
         image_size: int = 224,
         num_classes_per_sample: int = 3,
         exclude_val=False,
-        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH||agd20k",
+        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH||agd20k||drivelm",
     ):
         self.exclude_val = exclude_val
         self.samples_per_epoch = samples_per_epoch
@@ -347,7 +436,7 @@ class SemSegDataset(torch.utils.data.Dataset):
             image_path = image[idx]
             label_path = labels[idx]
             label = Image.open(label_path)
-            label = np.array(label).astype(bool)
+            label = np.array(label)>128
 
             img = cv2.imread(image_path)
             image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -359,6 +448,24 @@ class SemSegDataset(torch.utils.data.Dataset):
             resize = image.shape[:2]
 
             sampled_classes = self.data2classes[ds][idx]
+
+        elif ds == "drivelm":
+            _, info_list = self.data2list[ds]
+            idx = random.randint(0, len(info_list) - 1)
+            info = info_list[idx]
+            image_path_list = [os.path.join(self.base_image_dir, "drivelm", info['image_paths'][idx][3:]) for idx in CAM_ORDER]
+            image = combine_images_2x3(image_path_list)
+
+            # preprocess image for clip
+            image_clip = self.clip_image_processor.preprocess(
+                image, return_tensors="pt"
+            )["pixel_values"][0]
+            image = self.transform.apply_image(image)  # preprocess image for sam
+            resize = image.shape[:2]
+
+            image_path = None
+            sampled_classes = None
+
         else:
             raise NotImplementedError
 
@@ -372,6 +479,22 @@ class SemSegDataset(torch.utils.data.Dataset):
                                          action_name=sampled_classes[1].lower())
             )
             answers.append(random.choice(self.answer_list))
+        elif ds == "drivelm":
+            multimodal = False
+            candidates = info['QA']['perception']
+            for candidate in candidates:
+                question = candidate['Q']
+                answer = candidate['A']
+                if question.count('<c') == 0 and answer.count('<c') == 1:
+                    multimodal = True
+                    break
+            questions.append(DEFAULT_IMAGE_TOKEN + "\n" + question)
+            # Now only support one
+            if multimodal:
+                tag = np.unique(re.findall(r'<(.*?)>', answer)).tolist()
+                for t in tag:
+                    answer = answer.replace(t, 'SEG')
+            answers.append(answer)
         else:
             for sampled_cls in sampled_classes:
                 text = sampled_cls
@@ -417,7 +540,23 @@ class SemSegDataset(torch.utils.data.Dataset):
         elif ds == "agd20k":
             label = torch.from_numpy(label).long()
             masks = torch.stack([label], dim=0)
-
+        elif ds == "drivelm":
+            if multimodal:
+                index = f"<{tag[0]}>".replace(" ", "")
+                try:
+                    cam_id = index.split(",")[1]
+                    order = CAM_ORDER.index(cam_id)
+                except:
+                    print("error")
+                mask_path_list = [None]*6
+                mask_path = os.path.join(self.base_image_dir, "drivelm", info['key_object_infos'][index]['mask_path'])
+                mask_path_list[order] = mask_path
+                mask = combine_images_2x3(mask_path_list, gray=True)
+                label = (torch.from_numpy(mask)/255.0).long()
+                masks = torch.stack([label], dim=0)
+            else:
+                label = torch.Tensor(0)
+                masks = torch.Tensor(0)
         else:
             label = torch.from_numpy(label).long()
             masks = []

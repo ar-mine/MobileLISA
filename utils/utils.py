@@ -45,7 +45,9 @@ AFFORD_QUESTION_LIST = [
     DEFAULT_IMAGE_TOKEN + "\n" +
     "What part of the {object_name} should we interact with in order to {action_name} it?"
 ]
-
+"What part of the cup should we interact with in order to sip it?"
+"/media/automan/6E94666294662CB1/A_Content/Datasets/Affordance/AGD20K/Seen/trainset/egocentric/sip/cup/cup_000098.jpg"
+"/media/automan/6E94666294662CB1/A_Content/Datasets/Affordance/AGD20K/Seen/testset/egocentric/sip/cup/cup_003613.jpg"
 # AFFORD_ANSWER_LIST = [
 #     "It is [MASK].",
 #     "Sure, [MASK].",

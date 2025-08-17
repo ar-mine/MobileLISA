@@ -269,6 +269,8 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
         multimask_output = False
         pred_masks = []
         for i in range(len(pred_embeddings)):
+            if pred_embeddings[i].shape[0] == 0:
+                continue
             (
                 sparse_embeddings,
                 dense_embeddings,
@@ -306,16 +308,18 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
 
         ce_loss = model_output.loss
         ce_loss = ce_loss * self.ce_loss_weight
-        mask_bce_loss = 0
-        mask_dice_loss = 0
+        mask_bce_loss = torch.tensor(0).to(ce_loss.device).to(ce_loss.dtype)
+        mask_dice_loss = torch.tensor(0).to(ce_loss.device).to(ce_loss.dtype)
         num_masks = 0
         for batch_idx in range(len(pred_masks)):
             gt_mask = gt_masks[batch_idx]
             pred_mask = pred_masks[batch_idx]
 
-            assert (
+            if not (
                 gt_mask.shape[0] == pred_mask.shape[0]
-            ), "gt_mask.shape: {}, pred_mask.shape: {}".format(
+            ):
+                continue
+                "gt_mask.shape: {}, pred_mask.shape: {}".format(
                 gt_mask.shape, pred_mask.shape
             )
             mask_bce_loss += (
