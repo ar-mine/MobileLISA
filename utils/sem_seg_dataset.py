@@ -277,7 +277,11 @@ def init_drivelm(base_image_dir):
         key_frames.extend([value for value in v['key_frames'].values()])
 
     for frame in key_frames:
-        frame['QA']['perception'] = [p for p in frame['QA']['perception'] if p['Q'].count('<c') == 0]
+        frame['multimodal'] = {'perception': []}
+        # frame['QA']['perception'] = [p for p in frame['QA']['perception'] if p['Q'].count('<c') == 0]
+        for i, p in enumerate(frame['QA']['perception']):
+            if p['Q'].count('<c') == 0 and 4 >= p['A'].count('<c') >= 1:
+                frame['multimodal']['perception'].append(i)
 
     print("DriveLm: ", len(key_frames))
     return None, None, key_frames
@@ -483,14 +487,22 @@ class SemSegDataset(torch.utils.data.Dataset):
             )
             answers.append(random.choice(self.answer_list))
         elif ds == "drivelm":
-            multimodal = False
+            multimodal = True
             candidates = info['QA']['perception']
-            for candidate in candidates:
-                question = candidate['Q']
-                answer = candidate['A']
-                if question.count('<c') == 0 and 4 >= answer.count('<c') >= 1:
-                    multimodal = True
-                    break
+            if len(info['multimodal']['perception']) == 0:
+                multimodal = False
+                candidate_idx = 0
+            else:
+                candidate_idx = random.choice(info['multimodal']['perception'])
+            candidate = candidates[candidate_idx]
+            question = candidate['Q']
+            answer = candidate['A']
+            # for candidate in candidates:
+            #     question = candidate['Q']
+            #     answer = candidate['A']
+            #     if question.count('<c') == 0 and 4 >= answer.count('<c') >= 1:
+            #         multimodal = True
+            #         break
             questions.append(DEFAULT_IMAGE_TOKEN + "\n" + question)
             # Now only support one
             if multimodal:
