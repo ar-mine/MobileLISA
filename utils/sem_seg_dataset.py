@@ -278,10 +278,13 @@ def init_drivelm(base_image_dir):
 
     for frame in key_frames:
         frame['multimodal'] = {'perception': []}
+        frame['pure_text'] = {'perception': []}
         # frame['QA']['perception'] = [p for p in frame['QA']['perception'] if p['Q'].count('<c') == 0]
         for i, p in enumerate(frame['QA']['perception']):
             if p['Q'].count('<c') == 0 and 4 >= p['A'].count('<c') >= 1:
                 frame['multimodal']['perception'].append(i)
+            if p['Q'].count('<c') == 0 and p['A'].count('<c') == 0:
+                frame['pure_text']['perception'].append(i)
 
     print("DriveLm: ", len(key_frames))
     return None, None, key_frames
@@ -528,6 +531,13 @@ class SemSegDataset(torch.utils.data.Dataset):
 
         conversations = []
         conv = conversation_lib.default_conversation.copy()
+
+        if ds == "drivelm":
+            conv.system = ("As an AI assistant specialized in analyzing 2x3 grid collages of vehicle driving scenes "
+                           "from six perspectives (top row: CAM_FRONT_LEFT, CAM_FRONT, CAM_FRONT_RIGHT; bottom row: "
+                           "CAM_BACK_LEFT, CAM_BACK, CAM_BACK_RIGHT), carefully examine the provided image, interpret "
+                           "all views, and provide accurate, detailed, context-aware, helpful responses to user "
+                           "questions based on visible elements.")
 
         i = 0
         while i < len(questions):

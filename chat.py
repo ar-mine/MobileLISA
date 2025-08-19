@@ -171,6 +171,11 @@ def main(args):
     while True:
         conv = conversation_lib.conv_templates[args.conv_type].copy()
         conv.messages = []
+        conv.system = ("As an AI assistant specialized in analyzing 2x3 grid collages of vehicle driving scenes "
+                       "from six perspectives (top row: CAM_FRONT_LEFT, CAM_FRONT, CAM_FRONT_RIGHT; bottom row: "
+                       "CAM_BACK_LEFT, CAM_BACK, CAM_BACK_RIGHT), carefully examine the provided image, interpret "
+                       "all views, and provide accurate, detailed, context-aware, helpful responses to user "
+                       "questions based on visible elements.")
 
         if DEBUG:
             prompt = DEFAULT_IMAGE_TOKEN + "\n" + "Please help me segment the object in the right hand"
