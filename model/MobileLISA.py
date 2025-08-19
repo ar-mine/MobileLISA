@@ -270,6 +270,7 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
         pred_masks = []
         for i in range(len(pred_embeddings)):
             if pred_embeddings[i].shape[0] == 0:
+                pred_masks.append(torch.Tensor(0))
                 continue
             (
                 sparse_embeddings,
@@ -311,17 +312,11 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
         mask_bce_loss = torch.tensor(0).to(ce_loss.device).to(ce_loss.dtype)
         mask_dice_loss = torch.tensor(0).to(ce_loss.device).to(ce_loss.dtype)
         num_masks = 0
-        for batch_idx in range(len(pred_masks)):
-            gt_mask = gt_masks[batch_idx]
-            pred_mask = pred_masks[batch_idx]
-
-            if not (
-                gt_mask.shape[0] == pred_mask.shape[0]
-            ):
+        assert len(pred_masks) == len(gt_masks), "Length of pred_masks is not same as gt_masks!"
+        for pred_mask, gt_mask in zip(pred_masks, gt_masks):
+            if gt_mask.shape[0] == 0:
                 continue
-                "gt_mask.shape: {}, pred_mask.shape: {}".format(
-                gt_mask.shape, pred_mask.shape
-            )
+
             mask_bce_loss += (
                 sigmoid_ce_loss(pred_mask, gt_mask, num_masks=gt_mask.shape[0])
                 * gt_mask.shape[0]
