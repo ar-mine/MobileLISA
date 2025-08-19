@@ -490,13 +490,17 @@ class SemSegDataset(torch.utils.data.Dataset):
             )
             answers.append(random.choice(self.answer_list))
         elif ds == "drivelm":
-            multimodal = True
             candidates = info['QA']['perception']
             if len(info['multimodal']['perception']) == 0:
                 multimodal = False
-                candidate_idx = 0
+                candidate_idx = random.choice(info['pure_text']['perception'])
             else:
-                candidate_idx = random.choice(info['multimodal']['perception'])
+                if random.random() < 0.5:
+                    multimodal = False
+                    candidate_idx = random.choice(info['pure_text']['perception'])
+                else:
+                    multimodal = True
+                    candidate_idx = random.choice(info['multimodal']['perception'])
             candidate = candidates[candidate_idx]
             question = candidate['Q']
             answer = candidate['A']
@@ -511,7 +515,10 @@ class SemSegDataset(torch.utils.data.Dataset):
             if multimodal:
                 tag = re.findall(r'<(.*?)>', answer)
                 for t in tag:
-                    answer = answer.replace(t, 'SEG')
+                    full_tag = f"<{t}>"
+                    full_tag_processed = f"<{t}>".replace(' ', '')
+                    category = info['key_object_infos'][full_tag_processed]['Visual_description'].lower().replace('.', '')
+                    answer = answer.replace(full_tag, f'{category} <SEG>')
             answers.append(answer)
         else:
             for sampled_cls in sampled_classes:

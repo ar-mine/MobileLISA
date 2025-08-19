@@ -23,5 +23,5 @@ GT:
 '<SEG> is in the left lane.'
 
 What is the relative positioning of the important objects in the current scene?
-/media/automan/ExSpace/MobileLISA/vis_output/drivelm_example0.png
+/media/automan/ExSpace/MobileLISA/vis_output/drivelm_example2.png
 '<SEG> is at the back of <SEG>.'

@@ -315,7 +315,7 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
         num_masks = 0
         assert len(pred_masks) == len(gt_masks), "Length of pred_masks is not same as gt_masks!"
         for pred_mask, gt_mask in zip(pred_masks, gt_masks):
-            if gt_mask.shape[0] == 0:
+            if gt_mask.shape[0] == 0 or pred_mask.shape != gt_mask.shape:
                 continue
 
             mask_bce_loss += (
