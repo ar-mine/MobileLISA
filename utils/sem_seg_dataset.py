@@ -267,6 +267,7 @@ def combine_images_2x3(image_paths, gray:bool=False):
 
 
 CAM_ORDER = ('CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT')
+QA_KEYS = ('perception', 'prediction', 'planning', 'behavior')
 def init_drivelm(base_image_dir):
     file_path = os.path.join(base_image_dir, "drivelm", "v1_0_train_nus_grounding.json")
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -276,15 +277,17 @@ def init_drivelm(base_image_dir):
     for k, v in data.items():
         key_frames.extend([value for value in v['key_frames'].values()])
 
+
     for frame in key_frames:
-        frame['multimodal'] = {'perception': []}
-        frame['pure_text'] = {'perception': []}
+        frame['multimodal'] = {k: [] for k in QA_KEYS}
+        frame['pure_text'] = {k: [] for k in QA_KEYS}
         # frame['QA']['perception'] = [p for p in frame['QA']['perception'] if p['Q'].count('<c') == 0]
-        for i, p in enumerate(frame['QA']['perception']):
-            if p['Q'].count('<c') == 0 and 4 >= p['A'].count('<c') >= 1:
-                frame['multimodal']['perception'].append(i)
-            if p['Q'].count('<c') == 0 and p['A'].count('<c') == 0:
-                frame['pure_text']['perception'].append(i)
+        for k in QA_KEYS:
+            for i, p in enumerate(frame['QA'][k]):
+                if p['Q'].count('<c') == 0 and 4 >= p['A'].count('<c') >= 1:
+                    frame['multimodal'][k].append(i)
+                if p['Q'].count('<c') == 0 and p['A'].count('<c') == 0:
+                    frame['pure_text'][k].append(i)
 
     print("DriveLm: ", len(key_frames))
     return None, None, key_frames
@@ -490,17 +493,21 @@ class SemSegDataset(torch.utils.data.Dataset):
             )
             answers.append(random.choice(self.answer_list))
         elif ds == "drivelm":
-            candidates = info['QA']['perception']
-            if len(info['multimodal']['perception']) == 0:
+            qa_key = random.choice(QA_KEYS)
+            candidates = info['QA'][qa_key]
+            if len(info['multimodal'][qa_key]) == 0:
                 multimodal = False
-                candidate_idx = random.choice(info['pure_text']['perception'])
+                candidate_idx = random.choice(info['pure_text'][qa_key])
+            elif len(info['pure_text'][qa_key]) == 0:
+                multimodal = True
+                candidate_idx = random.choice(info['multimodal'][qa_key])
             else:
                 if random.random() < 0.5:
                     multimodal = False
-                    candidate_idx = random.choice(info['pure_text']['perception'])
+                    candidate_idx = random.choice(info['pure_text'][qa_key])
                 else:
                     multimodal = True
-                    candidate_idx = random.choice(info['multimodal']['perception'])
+                    candidate_idx = random.choice(info['multimodal'][qa_key])
             candidate = candidates[candidate_idx]
             question = candidate['Q']
             answer = candidate['A']
