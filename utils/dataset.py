@@ -1,6 +1,5 @@
 import glob
 import os
-import random
 
 import cv2
 import numpy as np
@@ -17,16 +16,15 @@ from model.llava.constants import (DEFAULT_IMAGE_TOKEN, IGNORE_INDEX,
 from model.llava.mm_utils import tokenizer_image_token
 from model.segment_anything.utils.transforms import ResizeLongestSide
 
-from .conversation import get_default_conv_template
 from .data_processing import get_mask_from_json
 from .reason_seg_dataset import ReasonSegDataset
 from .refer import REFER
 from .refer_seg_dataset import ReferSegDataset
-from .sem_seg_dataset import SemSegDataset, init_100DOH, init_ade20k
+from .sem_seg_dataset import SemSegDataset
+from .vqa_dataset import VQADataset
+from .drivelm_seg_dataset import DriveLMSegDataset
 from .utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                     DEFAULT_IMAGE_TOKEN)
-from .vqa_dataset import VQADataset
-
 
 def collate_fn(
     batch, tokenizer=None, conv_type="llava_v1", use_mm_start_end=True, local_rank=-1
@@ -180,9 +178,9 @@ class HybridDataset(torch.utils.data.Dataset):
         image_size: int = 224,
         num_classes_per_sample: int = 3,
         exclude_val=False,
-        dataset="sem_seg||refer_seg||vqa||reason_seg",
+        dataset="sem_seg||refer_seg||vqa||reason_seg||drivelm_seg",
         sample_rate=[9, 3, 3, 1],
-        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary||100DOH",
+        sem_seg_data="ade20k||cocostuff||partimagenet||pascal_part||paco_lvis||mapillary",
         refer_seg_data="refclef||refcoco||refcoco+||refcocog",
         vqa_data="llava_instruct_150k",
         reason_seg_data="ReasonSeg|train",
@@ -260,6 +258,17 @@ class HybridDataset(torch.utils.data.Dataset):
                         exclude_val,
                         reason_seg_data,
                         explanatory,
+                    )
+                )
+            elif dataset == "drivelm_seg":
+                self.all_datasets.append(
+                    DriveLMSegDataset(
+                        base_image_dir,
+                        tokenizer,
+                        vision_tower,
+                        samples_per_epoch,
+                        precision,
+                        image_size,
                     )
                 )
 

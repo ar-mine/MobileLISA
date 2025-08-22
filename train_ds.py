@@ -52,7 +52,7 @@ def parse_args(args):
     parser.add_argument("--sample_rates", default="9,3,3,1", type=str)
     parser.add_argument(
         "--sem_seg_data",
-        default="ade20k||cocostuff||pascal_part||paco_lvis||mapillary||100DOH",
+        default="ade20k||cocostuff||pascal_part||paco_lvis||mapillary",
         type=str,
     )
     parser.add_argument(
@@ -140,7 +140,7 @@ def main(args):
         cache_dir=None,
         model_max_length=args.model_max_length,
         padding_side="right",
-        use_fast=False,
+        use_fast=True,
     )
     tokenizer.pad_token = tokenizer.unk_token
     num_added_tokens = tokenizer.add_tokens("<SEG>")
@@ -238,7 +238,7 @@ def main(args):
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
 
-    model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
 
     # make text_hidden_fcs, mask_decoder, lm_head, embed_tokens trainable
     for n, p in model.named_parameters():

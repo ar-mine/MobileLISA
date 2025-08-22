@@ -34,11 +34,11 @@ EXPLANATORY_QUESTION_LIST = [
 ]
 
 ANSWER_LIST = [
-    "It is [SEG].",
-    "Sure, [SEG].",
-    "Sure, it is [SEG].",
-    "Sure, the segmentation result is [SEG].",
-    "[SEG].",
+    "It is <SEG>.",
+    "Sure, <SEG>.",
+    "Sure, it is <SEG>.",
+    "Sure, the segmentation result is <SEG>.",
+    "<SEG>.",
 ]
 
 AFFORD_QUESTION_LIST = [

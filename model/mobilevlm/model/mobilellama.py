@@ -73,7 +73,8 @@ class MobileLlamaForCausalLM(LlamaForCausalLM, MobileVLMMetaForCausalLM):
             shift_labels = labels[..., 1:].contiguous()
             # Flatten the tokens
             loss_fct = CrossEntropyLoss()
-            shift_logits = shift_logits.view(-1, self.config.vocab_size)
+            shift_logits = shift_logits.view(-1, self.lm_head.out_features)
+            # shift_logits = shift_logits.view(-1, self.config.vocab_size)
             shift_labels = shift_labels.view(-1)
             # Enable model/pipeline parallelism
             shift_labels = shift_labels.to(shift_logits.device)
