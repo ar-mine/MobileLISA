@@ -71,8 +71,8 @@ def main(args):
         use_fast=False,
     )
     tokenizer.pad_token = tokenizer.unk_token
-    num_added_tokens = tokenizer.add_tokens("[SEG]")
-    args.seg_token_idx = tokenizer("[SEG]", add_special_tokens=False).input_ids[0]
+    num_added_tokens = tokenizer.add_tokens("<SEG>")
+    args.seg_token_idx = tokenizer("<SEG>", add_special_tokens=False).input_ids[0]
 
     if args.use_mm_start_end:
         tokenizer.add_tokens(
@@ -149,7 +149,7 @@ def main(args):
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
 
-    model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(len(tokenizer), pad_to_multiple_of=8)
 
     state_dict = torch.load(args.weight, map_location="cpu")
     model.load_state_dict(state_dict, strict=True)

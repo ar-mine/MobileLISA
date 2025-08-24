@@ -83,7 +83,7 @@ def main(args):
         use_fast=False,
     )
     tokenizer.pad_token = tokenizer.unk_token
-    args.seg_token_idx = tokenizer("[SEG]", add_special_tokens=False).input_ids[0]
+    args.seg_token_idx = tokenizer("<SEG>", add_special_tokens=False).input_ids[0]
 
 
     torch_dtype = torch.float32
