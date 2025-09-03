@@ -23,6 +23,7 @@ from .refer_seg_dataset import ReferSegDataset
 from .sem_seg_dataset import SemSegDataset
 from .vqa_dataset import VQADataset
 from .drivelm_seg_dataset import DriveLMSegDataset
+from .custom_seg_dataset import CustomSegDataset
 from .utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                     DEFAULT_IMAGE_TOKEN)
 
@@ -263,6 +264,17 @@ class HybridDataset(torch.utils.data.Dataset):
             elif dataset == "drivelm_seg":
                 self.all_datasets.append(
                     DriveLMSegDataset(
+                        base_image_dir,
+                        tokenizer,
+                        vision_tower,
+                        samples_per_epoch,
+                        precision,
+                        image_size,
+                    )
+                )
+            elif dataset == "custom_seg":
+                self.all_datasets.append(
+                    CustomSegDataset(
                         base_image_dir,
                         tokenizer,
                         vision_tower,
