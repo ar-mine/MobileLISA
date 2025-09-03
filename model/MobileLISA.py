@@ -3,13 +3,12 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import BitsAndBytesConfig, CLIPVisionModel
-from wandb.util import batched
+from transformers import AutoConfig, AutoModelForCausalLM, LlamaModel
 
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_PATCH_TOKEN)
 
-from .mobilevlm.model.mobilellama import MobileLlamaForCausalLM, MobileLlamaModel
+from .mobilevlm.model.mobilellama import MobileLlamaForCausalLM, MobileLlamaModel, MobileVLMConfig
 from .segment_anything import build_sam_vit_h
 
 
@@ -60,7 +59,12 @@ def sigmoid_ce_loss(
     return loss
 
 
+class MobileLisaConfig(MobileVLMConfig):
+    model_type = "mobilelisa"
+
+
 class MobileLisaMetaModel:
+    config_class = MobileLisaConfig
     def __init__(
         self,
         config,
@@ -75,6 +79,8 @@ class MobileLisaMetaModel:
             self.vision_pretrained = kwargs.get("vision_pretrained", None)
         else:
             self.vision_pretrained = kwargs.get("vision_pretrained", None)
+            if self.vision_pretrained == "None":
+                self.vision_pretrained = None
             self.initialize_lisa_modules(self.config)
 
     def initialize_lisa_modules(self, config):
@@ -132,12 +138,12 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
             config.mm_vision_tower = kwargs.get(
                 "vision_tower", "openai/clip-vit-large-patch14-336"
             )
-            self.ce_loss_weight = kwargs.pop("ce_loss_weight", None)
-            self.dice_loss_weight = kwargs.pop("dice_loss_weight", None)
-            self.bce_loss_weight = kwargs.pop("bce_loss_weight", None)
         else:
             config.mm_vision_tower = config.vision_tower
-            
+        self.ce_loss_weight = kwargs.pop("ce_loss_weight", None)
+        self.dice_loss_weight = kwargs.pop("dice_loss_weight", None)
+        self.bce_loss_weight = kwargs.pop("bce_loss_weight", None)
+
         self.seg_token_idx = kwargs.pop("seg_token_idx")
 
         super().__init__(config)
@@ -425,3 +431,7 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
                 pred_masks.append(pred_mask[:, 0])
 
         return output_ids, pred_masks
+
+
+AutoConfig.register("mobilelisa", MobileLisaConfig)
+AutoModelForCausalLM.register(MobileVLMConfig, MobileLISAForCausalLM)

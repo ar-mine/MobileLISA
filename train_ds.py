@@ -11,6 +11,7 @@ import psutil
 import torch
 import tqdm
 import transformers
+from transformers import AutoConfig, AutoTokenizer, AutoModel, AutoModelForCausalLM
 from peft import LoraConfig, get_peft_model
 from torch.utils.tensorboard import SummaryWriter
 
@@ -111,12 +112,9 @@ def parse_args(args):
 
 def main(args):
     args = parse_args(args)
-    # Use mobilevlm or llava-v1 as backbone
-    if "Mobile" in args.version:
-        enable_mobile = True
-    else:
-        enable_mobile = False
     args.log_dir = os.path.join(args.log_base_dir, args.exp_name)
+
+    # Init wandb
     enable_wandb = args.enable_wandb
     if args.local_rank == 0:
         os.makedirs(args.log_dir, exist_ok=True)
@@ -134,23 +132,23 @@ def main(args):
     else:
         writer = None
 
-    # Create model
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
+    # Init tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(
         args.version,
         cache_dir=None,
         model_max_length=args.model_max_length,
         padding_side="right",
         use_fast=True,
     )
-    tokenizer.pad_token = tokenizer.unk_token
-    num_added_tokens = tokenizer.add_tokens("<SEG>")
+    if not "<SEG>" in tokenizer.get_vocab():
+        tokenizer.add_tokens("<SEG>")
     args.seg_token_idx = tokenizer("<SEG>", add_special_tokens=False).input_ids[0]
 
+    # Init Model
     if args.use_mm_start_end:
         tokenizer.add_tokens(
             [DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True
         )
-
     model_args = {
         "train_mask_decoder": args.train_mask_decoder,
         "out_dim": args.out_dim,
@@ -167,17 +165,9 @@ def main(args):
         torch_dtype = torch.bfloat16
     elif args.precision == "fp16":
         torch_dtype = torch.half
-    if not enable_mobile:
-        model = LISAForCausalLM.from_pretrained(
-            args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
-        )
-    else:
-        model = MobileLISAForCausalLM.from_pretrained(
-            args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
-        )
-    model.config.eos_token_id = tokenizer.eos_token_id
-    model.config.bos_token_id = tokenizer.bos_token_id
-    model.config.pad_token_id = tokenizer.pad_token_id
+    model = AutoModelForCausalLM.from_pretrained(
+        args.version, torch_dtype=torch_dtype, low_cpu_mem_usage=True, **model_args
+    )
 
     model.enable_input_require_grads()
     model.gradient_checkpointing_enable()
