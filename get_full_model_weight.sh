@@ -1,1 +1,1 @@
-cd ./runs/drivelm/ckpt_model && python zero_to_fp32.py . ../pytorch_model.bin
+cd ./runs/mobilelisa_deictic/ckpt_model && python zero_to_fp32.py . ../pytorch_model.bin
