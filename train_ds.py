@@ -195,19 +195,19 @@ def main(args):
             lora_module_names = set()
             for name, module in model.named_modules():
                 if (
-                    isinstance(module, cls)
-                    and all(
-                        [
-                            x not in name
-                            for x in [
-                                "visual_model",
-                                "vision_tower",
-                                "mm_projector",
-                                "text_hidden_fcs",
-                            ]
-                        ]
-                    )
-                    and any([x in name for x in lora_target_modules])
+                        isinstance(module, cls)
+                        and all(
+                    [
+                        x not in name
+                        for x in [
+                        "visual_model",
+                        "vision_tower",
+                        "mm_projector",
+                        "text_hidden_fcs",
+                    ]
+                    ]
+                )
+                        and any([x in name for x in lora_target_modules])
                 ):
                     lora_module_names.add(name)
             return sorted(list(lora_module_names))
@@ -233,10 +233,10 @@ def main(args):
     # make text_hidden_fcs, mask_decoder, lm_head, embed_tokens trainable
     for n, p in model.named_parameters():
         if any(
-            [
-                x in n
-                for x in ["lm_head", "embed_tokens", "mask_decoder", "text_hidden_fcs"]
-            ]
+                [
+                    x in n
+                    for x in ["lm_head", "embed_tokens", "mask_decoder", "text_hidden_fcs"]
+                ]
         ):
             print("n: ", n, "p.shape: ", p.shape)
             p.requires_grad = True
@@ -248,9 +248,9 @@ def main(args):
         tokenizer,
         args.vision_tower,
         samples_per_epoch=args.batch_size
-        * args.grad_accumulation_steps
-        * args.steps_per_epoch
-        * world_size,
+                          * args.grad_accumulation_steps
+                          * args.steps_per_epoch
+                          * world_size,
         precision=args.precision,
         image_size=args.image_size,
         num_classes_per_sample=args.num_classes_per_sample,
@@ -341,7 +341,7 @@ def main(args):
         with open(os.path.join(args.resume, "latest"), "r") as f:
             ckpt_dir = f.readlines()[0].strip()
         args.start_epoch = (
-            int(ckpt_dir.replace("global_step", "")) // args.steps_per_epoch
+                int(ckpt_dir.replace("global_step", "")) // args.steps_per_epoch
         )
         print(
             "resume training from {}, start from epoch {}".format(
@@ -415,13 +415,13 @@ def main(args):
 
 
 def train(
-    train_loader,
-    model,
-    epoch,
-    scheduler,
-    writer,
-    train_iter,
-    args,
+        train_loader,
+        model,
+        epoch,
+        scheduler,
+        writer,
+        train_iter,
+        args,
 ):
     """Main training loop."""
     if args.enable_wandb:
@@ -450,6 +450,15 @@ def train(
     # switch to train mode
     model.train()
     end = time.time()
+
+    # 添加 tqdm 进度条，仅在主进程 (local_rank == 0) 显示
+    progress_bar = tqdm.tqdm(
+        total=args.steps_per_epoch,
+        desc=f"Epoch {epoch}",
+        disable=args.local_rank != 0,  # 仅在主进程显示
+        dynamic_ncols=True
+    )
+
     for global_step in range(args.steps_per_epoch):
         for i in range(args.grad_accumulation_steps):
             try:
@@ -497,6 +506,15 @@ def train(
         batch_time.update(time.time() - end)
         end = time.time()
 
+        # 更新进度条
+        progress_bar.set_postfix({
+            "loss": f"{losses.avg:.4f}",
+            "ce_loss": f"{ce_losses.avg:.4f}",
+            "mask_bce_loss": f"{mask_bce_losses.avg:.4f}",
+            "mask_dice_loss": f"{mask_dice_losses.avg:.4f}"
+        })
+        progress_bar.update(1)
+
         if global_step % args.print_freq == 0:
             if args.distributed:
                 batch_time.all_reduce()
@@ -508,23 +526,23 @@ def train(
                 mask_dice_losses.all_reduce()
                 mask_losses.all_reduce()
 
-            if args.local_rank == 0:
-                progress.display(global_step + 1)
-                writer.add_scalar("train/loss", losses.avg, global_step)
-                writer.add_scalar("train/ce_loss", ce_losses.avg, global_step)
-                writer.add_scalar(
-                    "train/mask_bce_loss", mask_bce_losses.avg, global_step
-                )
-                writer.add_scalar(
-                    "train/mask_dice_loss", mask_dice_losses.avg, global_step
-                )
-                writer.add_scalar("train/mask_loss", mask_losses.avg, global_step)
-                writer.add_scalar(
-                    "metrics/total_secs_per_batch", batch_time.avg, global_step
-                )
-                writer.add_scalar(
-                    "metrics/data_secs_per_batch", data_time.avg, global_step
-                )
+            # if args.local_rank == 0:
+            #     progress.display(global_step + 1)
+            #     writer.add_scalar("train/loss", losses.avg, global_step)
+            #     writer.add_scalar("train/ce_loss", ce_losses.avg, global_step)
+            #     writer.add_scalar(
+            #         "train/mask_bce_loss", mask_bce_losses.avg, global_step
+            #     )
+            #     writer.add_scalar(
+            #         "train/mask_dice_loss", mask_dice_losses.avg, global_step
+            #     )
+            #     writer.add_scalar("train/mask_loss", mask_losses.avg, global_step)
+            #     writer.add_scalar(
+            #         "metrics/total_secs_per_batch", batch_time.avg, global_step
+            #     )
+            #     writer.add_scalar(
+            #         "metrics/data_secs_per_batch", data_time.avg, global_step
+            #     )
 
             batch_time.reset()
             data_time.reset()
@@ -538,6 +556,9 @@ def train(
             curr_lr = scheduler.get_last_lr()
             if args.local_rank == 0:
                 writer.add_scalar("train/lr", curr_lr[0], global_step)
+
+    # 关闭进度条
+    progress_bar.close()
 
     return train_iter
 
