@@ -1,11 +1,24 @@
 import torch
-import torch.nn as nn
+import math
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, BitsAndBytesConfig
 from .vision_encoder import build_vision_tower
 from .vision_projector import build_vision_projector
 from ..constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, \
     DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
+
+
+def sinusoidal_pos_embed(pos, dim, base=10000):
+    """
+    生成sinusoidal位置编码。
+    - 对于时间（1D）：pos是标量k。
+    """
+    pos = torch.tensor(pos, dtype=torch.float32)
+    div_term = torch.exp(torch.arange(0, dim, 2) * -(math.log(base) / dim))
+    pe = torch.zeros(dim)
+    pe[0::2] = torch.sin(pos * div_term)
+    pe[1::2] = torch.cos(pos * div_term)
+    return pe
 
 
 class MobileVLMMetaModel:
@@ -15,6 +28,9 @@ class MobileVLMMetaModel:
         if hasattr(config, "mm_vision_tower"):  
             self.vision_tower = build_vision_tower(config, delay_load=True)
             self.mm_projector = build_vision_projector(config)
+        # 添加时间编码相关参数
+        self.alpha = 0.5  # 时间编码权重，控制强度
+        self.patch_size = 14  # CLIP默认patch大小，根据CLIP-224/336调整为14
 
     def get_vision_tower(self):
         vision_tower = getattr(self, 'vision_tower', None)
@@ -83,10 +99,46 @@ class MobileVLMMetaForCausalLM(ABC):
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
+    # def encode_images(self, images):
+    #     image_features = self.get_model().get_vision_tower()(images)
+    #     image_features = self.get_model().mm_projector(image_features)
+    #     return image_features
+
     def encode_images(self, images):
-        image_features = self.get_model().get_vision_tower()(images)
-        image_features = self.get_model().mm_projector(image_features)
-        return image_features
+        # 支持多图输入：images [B, K, C, H, W]，K=帧数（单图像时K=1）
+        if len(images.shape) == 4:  # 单图像 [B, C, H, W]，扩展为 [B, 1, C, H, W]
+            images = images.unsqueeze(1)
+        B, K = images.shape[0], images.shape[1]
+
+        image_features_list = []  # 最终 [B, K*N, D]
+        for b in range(B):
+            seq_feats = []  # 每批的序列特征
+            for k in range(K):
+                patch_feat = self.get_model().get_vision_tower()(images[b, k].unsqueeze(0))  # [1, N, D]
+
+                N, D = patch_feat.shape[1], patch_feat.shape[2]
+
+                # 时间编码：1D sinusoidal for k
+                pos_temporal = sinusoidal_pos_embed(k, D).unsqueeze(0).unsqueeze(0).repeat(1, N, 1).to(patch_feat.dtype).to(patch_feat.device)  # [1, N, D]
+
+                # 融合：patch_feat + alpha * pos_temporal（空间编码由CLIP提供）
+                frame_feat_with_pos = patch_feat + self.get_model().alpha * pos_temporal
+
+                seq_feats.append(frame_feat_with_pos)
+
+            # Concat所有帧的特征：[1, K*N, D]
+            seq_feat = torch.cat(seq_feats, dim=1)
+            image_features_list.append(seq_feat.squeeze(0))  # [K*N, D]
+
+        image_features = torch.stack(image_features_list, dim=0)  # [B, K*N, D]
+
+        # 通过mm_projector投影 (只能处理单个图片feature)
+        projected_image_features = []
+        for i in range(K):
+            projected_image_feature = self.get_model().mm_projector(image_features[:,i*N:(i+1)*N,:])
+            projected_image_features.append(projected_image_feature)
+        projected_image_features = torch.cat(projected_image_features, dim=1)
+        return projected_image_features
 
     def prepare_inputs_labels_for_multimodal(
             self, input_ids, attention_mask, past_key_values, labels, images):
@@ -96,14 +148,14 @@ class MobileVLMMetaForCausalLM(ABC):
                 attention_mask = torch.ones((attention_mask.shape[0], past_key_values[-1][-1].shape[-2] + 1), dtype=attention_mask.dtype, device=attention_mask.device)
             return input_ids, attention_mask, past_key_values, None, labels
 
-        if type(images) is list or images.ndim == 5:
-            concat_images = torch.cat([image for image in images], dim=0)
-            image_features = self.encode_images(concat_images)
-            split_sizes = [image.shape[0] for image in images]
-            image_features = torch.split(image_features, split_sizes, dim=0)
-            image_features = [x.flatten(0, 1) for x in image_features]
-        else:
-            image_features = self.encode_images(images)
+        # if type(images) is list or images.ndim == 5:
+        #     concat_images = torch.cat([image for image in images], dim=0)
+        #     image_features = self.encode_images(concat_images)
+        #     split_sizes = [image.shape[0] for image in images]
+        #     image_features = torch.split(image_features, split_sizes, dim=0)
+        #     image_features = [x.flatten(0, 1) for x in image_features]
+        # else:
+        image_features = self.encode_images(images)
 
         new_input_embeds = []
         new_labels = [] if labels is not None else None

@@ -1,5 +1,6 @@
 from typing import List
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -57,6 +58,28 @@ def sigmoid_ce_loss(
     loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
     loss = loss.flatten(1, 2).mean(1).sum() / (num_masks + 1e-8)
     return loss
+
+
+def sinusoidal_pos_embed(pos, dim, base=10000):
+    """
+    生成sinusoidal位置编码。
+    - 对于时间（1D）：pos是标量k。
+    - 对于空间（2D）：pos是(i,j)元组。
+    """
+    if isinstance(pos, (int, float)):  # 1D时间编码
+        pos = torch.tensor(pos, dtype=torch.float32)
+        div_term = torch.exp(torch.arange(0, dim, 2) * -(math.log(base) / dim))
+        pe = torch.zeros(dim)
+        pe[0::2] = torch.sin(pos * div_term)
+        pe[1::2] = torch.cos(pos * div_term)
+        return pe
+    else:  # 2D空间编码，pos=(i,j) tensors
+        i, j = pos
+        pe = torch.zeros(dim)
+        div_term = torch.exp(torch.arange(0, dim, 2) * -(math.log(base) / dim))
+        pe[0::2] = torch.sin(i * div_term) + torch.sin(j * div_term)
+        pe[1::2] = torch.cos(i * div_term) + torch.cos(j * div_term)
+        return pe
 
 
 class MobileLisaConfig(MobileVLMConfig):
@@ -126,6 +149,11 @@ class MobileLisaModel(MobileLisaMetaModel, MobileLlamaModel):
         self.config.pretrain_mm_mlp_adapter = None
         self.config.mm_use_im_patch_token = False
 
+        # 添加时间编码相关参数
+        self.alpha = 0.5  # 时间编码权重，控制强度
+        self.patch_size = 14  # 假设ViT patch大小，根据CLIP/SAM配置调整
+        self.embed_dim = config.hidden_size  # 嵌入维度，与模型匹配
+
 
 class MobileLISAForCausalLM(MobileLlamaForCausalLM):
     def __init__(
@@ -174,18 +202,18 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
         return self.model_forward(**kwargs)
 
     def model_forward(
-        self,
-        images: torch.FloatTensor,
-        images_clip: torch.FloatTensor,
-        input_ids: torch.LongTensor,
-        labels: torch.LongTensor,
-        attention_masks: torch.LongTensor,
-        offset: torch.LongTensor,
-        masks_list: List[torch.FloatTensor],
-        label_list: List[torch.Tensor],
-        resize_list: List[tuple],
-        inference: bool = False,
-        **kwargs,
+            self,
+            images: torch.FloatTensor,
+            images_clip: torch.FloatTensor,
+            input_ids: torch.LongTensor,
+            labels: torch.LongTensor,
+            attention_masks: torch.LongTensor,
+            offset: torch.LongTensor,
+            masks_list: List[torch.FloatTensor],
+            label_list: List[torch.Tensor],
+            resize_list: List[tuple],
+            inference: bool = False,
+            **kwargs,
     ):
         image_embeddings = self.get_visual_embs(images)
         batch_size = image_embeddings.shape[0]
@@ -199,11 +227,19 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
             ],
             dim=1,
         )
+        # Due to use Mobilelisa, the image projector output smaller dimension of features
+        # The 143 or 255 only depends on the image projector used by the backbone
         # hack for IMAGE_TOKEN_INDEX (we suppose that there is only one image, and it is in the front)
-        seg_token_mask = torch.cat(
-            [torch.zeros((seg_token_mask.shape[0], 143)).bool().cuda(), seg_token_mask],
-            dim=1,
-        )
+        if len(images_clip.shape) == 5:
+            seg_token_mask = torch.cat(
+                [torch.zeros((seg_token_mask.shape[0], images_clip.shape[1]*144-1)).bool().cuda(), seg_token_mask],
+                dim=1,
+            )
+        else:
+            seg_token_mask = torch.cat(
+                [torch.zeros((seg_token_mask.shape[0], 143)).bool().cuda(), seg_token_mask],
+                dim=1,
+            )
 
         if inference:
             n_batch = 1
@@ -325,12 +361,12 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
                 continue
 
             mask_bce_loss += (
-                sigmoid_ce_loss(pred_mask, gt_mask, num_masks=gt_mask.shape[0])
-                * gt_mask.shape[0]
+                    sigmoid_ce_loss(pred_mask, gt_mask, num_masks=gt_mask.shape[0])
+                    * gt_mask.shape[0]
             )
             mask_dice_loss += (
-                dice_loss(pred_mask, gt_mask, num_masks=gt_mask.shape[0])
-                * gt_mask.shape[0]
+                    dice_loss(pred_mask, gt_mask, num_masks=gt_mask.shape[0])
+                    * gt_mask.shape[0]
             )
             num_masks += gt_mask.shape[0]
 
@@ -347,6 +383,7 @@ class MobileLISAForCausalLM(MobileLlamaForCausalLM):
             "mask_dice_loss": mask_dice_loss,
             "mask_loss": mask_loss,
         }
+
 
     def evaluate(
         self,
